@@ -25,10 +25,14 @@ class AgentState(TypedDict):
     messages:            Annotated[list, operator.add]
 
 # ── 2. IMPORT DES VRAIS AGENTS ────────────────────────────────
-from agents.analyste  import analyste_node
-from agents.qa_agent  import qa_agent_node
+from agents.analyste     import analyste_node
+from agents.qa_agent     import qa_agent_node
+from agents.scraper      import scraper_node      # ← Membre 2
+from agents.cv_adapter   import cv_adapter_node   # ← Membre 2
+from agents.gap_analyzer import gap_analyzer_node # ← Membre 2
+from agents.entretien    import entretien_node    # ← Membre 2
 
-# ── 3. AGENTS MOCKÉS (scraper, cv_adapter, gap, entretien) ───
+# ── 3. SUPERVISOR + HUMAN LOOP (restent dans graph.py) ───────
 def supervisor_node(state: AgentState) -> AgentState:
     print(f"[SUPERVISOR] Requête : {state['user_query']}")
     query = state["user_query"].lower()
@@ -52,43 +56,6 @@ def supervisor_node(state: AgentState) -> AgentState:
     return {**state, "next_agent": next_a,
             "messages": [{"role": "supervisor", "content": f"routing → {next_a}"}]}
 
-def scraper_node(state: AgentState) -> AgentState:
-    print("[SCRAPER] Recherche d'offres...")
-    offres = [
-        {"title": "Stage Data Scientist",  "company": "OCP Digital",
-         "location": "Casablanca", "ats_keywords": ["Python", "PyTorch", "MLOps"]},
-        {"title": "Stage ML Engineer",     "company": "CIH Bank",
-         "location": "Rabat",      "ats_keywords": ["Python", "TensorFlow", "Docker"]},
-        {"title": "Stage QA Engineer",     "company": "Capgemini Maroc",
-         "location": "Casablanca", "ats_keywords": ["Pytest", "Selenium", "CI/CD"]},
-    ]
-    print(f"[SCRAPER] {len(offres)} offres trouvées")
-    return {**state, "job_offers": offres,
-            "messages": [{"role": "scraper", "content": f"{len(offres)} offres"}]}
-
-def cv_adapter_node(state: AgentState) -> AgentState:
-    print("[CV ADAPTER] Adaptation du CV...")
-    offer    = state.get("selected_offer") or state.get("ranked_offers", [{}])[0]
-    feedback = state.get("human_feedback", "")
-    keywords = offer.get("ats_keywords", [])
-
-    # Limite les retries à 2 maximum
-    retry_count = state.get("_retry_count", 0)
-    if retry_count >= 2:
-        print("[CV ADAPTER] ⚠️  Max retries atteint — on force qa_passed=True")
-        return {**state, "qa_passed": True, "_retry_count": 0,
-                "messages": [{"role": "cv_adapter", "content": "CV adapté (max retries)"}]}
-
-    adapted = f"""{state.get('cv_text', '')}
-
---- CV ADAPTÉ POUR : {offer.get('title')} chez {offer.get('company')} ---
-Compétences mises en avant : {', '.join(keywords)}
-{f'Corrections suite au feedback : {feedback}' if feedback else ''}
-"""
-    return {**state, "adapted_cv": adapted, "human_validated": False,
-            "selected_offer": offer, "_retry_count": retry_count + 1,
-            "messages": [{"role": "cv_adapter", "content": "CV adapté"}]}
-
 def human_loop_node(state: AgentState) -> AgentState:
     print("[HUMAN LOOP] ⚠️  En attente de validation humaine...")
     validated = state.get("human_validated", False)
@@ -96,29 +63,6 @@ def human_loop_node(state: AgentState) -> AgentState:
     return {**state,
             "messages": [{"role": "human",
             "content": f"{'approuvé' if validated else 'refusé'}"}]}
-
-def gap_analyzer_node(state: AgentState) -> AgentState:
-    print("[GAP ANALYZER] Analyse des compétences manquantes...")
-    offer   = state.get("selected_offer", {})
-    missing = offer.get("missing_skills", ["PyTorch", "MLOps", "Docker"])
-    print(f"[GAP ANALYZER] Gaps : {missing}")
-    return {**state, "gaps": missing,
-            "messages": [{"role": "gap_analyzer", "content": f"Gaps : {missing}"}]}
-
-def entretien_node(state: AgentState) -> AgentState:
-    print("[ENTRETIEN] Génération des questions...")
-    offer     = state.get("selected_offer", {})
-    questions = [
-        {"question": f"Expliquez votre expérience en {offer.get('title', 'IA')}",
-         "type": "technique"},
-        {"question": "Décrivez un projet difficile et comment vous l'avez résolu",
-         "type": "comportemental"},
-        {"question": f"Pourquoi {offer.get('company', 'cette entreprise')} ?",
-         "type": "motivation"},
-    ]
-    return {**state, "interview_questions": questions,
-            "messages": [{"role": "entretien",
-            "content": f"{len(questions)} questions générées"}]}
 
 # ── 4. ROUTEURS ───────────────────────────────────────────────
 def route_supervisor(state: AgentState) -> str:
@@ -152,8 +96,8 @@ def build_graph():
          "entretien": "entretien", "end": END}
     )
 
-    graph.add_edge("scraper",  "analyste")
-    graph.add_edge("analyste", "supervisor")
+    graph.add_edge("scraper",    "analyste")
+    graph.add_edge("analyste",   "supervisor")
     graph.add_edge("cv_adapter", "qa_agent")
 
     graph.add_conditional_edges(
