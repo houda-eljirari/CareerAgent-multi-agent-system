@@ -192,20 +192,50 @@ elif st.session_state.stage == "cv_adapt":
     offer = st.session_state.selected_offer
     st.info(f"Offre sélectionnée : **{offer['title']}** chez **{offer['company']}**")
 
-    with st.spinner("🤖 Agent CV Adapter + Agent QA en cours..."):
-        state2 = {
-            **st.session_state.result,
-            "user_query":      "Je veux adapter mon cv",
-            "selected_offer":  offer,
-            "adapted_cv":      "",
-            "human_validated": False,
-            "qa_passed":       False,
-            "messages":        [],
-        }
-        result2 = app.invoke(state2, st.session_state.config)
-        st.session_state.result = result2
-        st.session_state.stage  = "validation"
-        st.rerun()
+    # ── Détails de l'offre ────────────────────────────────────
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"**📍 Localisation :** {offer.get('location', 'N/A')}")
+        st.markdown(f"**⏱️ Durée :** {offer.get('duration', 'N/A')}")
+    with col2:
+        st.markdown(f"**🎯 Mots-clés ATS :** `{', '.join(offer.get('ats_keywords', []))}`")
+        st.markdown(f"**📊 Score fit :** {offer.get('score', 0)}/100")
+
+    st.divider()
+
+    # ── Ce que les agents vont faire ─────────────────────────
+    st.subheader("🤖 Actions en cours")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Agent CV Adapter — Prompt B**")
+        st.markdown("- Intègre les mots-clés ATS sans inventer de compétences")
+        st.markdown("- Réécrit les sections pertinentes")
+        st.markdown("- Structure le CV pour les parsers ATS")
+    with col2:
+        st.markdown("**Agent QA — 5 tests automatisés**")
+        st.markdown("- T01 : Couverture mots-clés ATS")
+        st.markdown("- T02 : Détection d'hallucinations")
+        st.markdown("- T03 : Cohérence CV original / adapté")
+        st.markdown("- T04 : Format compatible ATS")
+        st.markdown("- T05 : Pertinence par rapport à l'offre")
+
+    st.divider()
+
+    if st.button("🚀 Lancer l'adaptation", type="primary", use_container_width=True):
+        with st.spinner("🤖 Agent CV Adapter + Agent QA en cours..."):
+            state2 = {
+                **st.session_state.result,
+                "user_query":      "Je veux adapter mon cv",
+                "selected_offer":  offer,
+                "adapted_cv":      "",
+                "human_validated": False,
+                "qa_passed":       False,
+                "messages":        [],
+            }
+            result2 = app.invoke(state2, st.session_state.config)
+            st.session_state.result = result2
+            st.session_state.stage  = "validation"
+            st.rerun()
 
 # ══════════════════════════════════════════════════════════════
 # ÉTAPE 4 : Human-in-the-Loop
@@ -264,15 +294,18 @@ elif st.session_state.stage == "results":
 
     with st.spinner("🤖 Gap Analyzer + Entretien Prep en cours..."):
         result3 = app.invoke(None, st.session_state.config)
+        # Fusionner avec le résultat précédent pour garder _gap_plan
+        prev = st.session_state.result or {}
+        result3 = {**prev, **result3}
         st.session_state.result = result3
 
     # Gaps
     st.subheader("📈 Compétences à développer")
     gaps = result3.get("gaps", [])
     if gaps:
-        cols = st.columns(len(gaps))
+        cols = st.columns(min(len(gaps), 4))
         for i, gap in enumerate(gaps):
-            with cols[i]:
+            with cols[i % 4]:
                 st.error(f"❌ {gap}")
     else:
         st.success("Aucun gap majeur détecté !")
@@ -280,13 +313,26 @@ elif st.session_state.stage == "results":
     # Plan d'apprentissage
     gap_plan = result3.get("_gap_plan", [])
     if gap_plan:
-        st.subheader("📚 Plan d'apprentissage")
+        st.subheader("📚 Plan d'apprentissage 30/60/90 jours")
         for item in gap_plan:
-            with st.expander(f"[{item.get('priorité','?').upper()}] {item.get('compétence')} — {item.get('durée')}"):
-                st.markdown(f"**Niveau :** {item.get('niveau')}")
-                st.markdown(f"**Ressource :** {item.get('ressource')}")
+            priorite = item.get('priorité', '?').upper()
+            competence = item.get('compétence', '?')
+            duree = item.get('durée', '?')
+            icon = "🔴" if priorite == "HAUTE" else ("🟡" if priorite == "MOYENNE" else "🟢")
+            with st.expander(f"{icon} [{priorite}] {competence} — {duree}"):
+                st.markdown(f"**Niveau :** {item.get('niveau', '?')}")
+                st.markdown(f"**Ressource :** {item.get('ressource', '?')}")
                 if item.get('conseil'):
                     st.info(item.get('conseil'))
+    elif gaps:
+        # Fallback — afficher un plan simple si _gap_plan vide
+        st.subheader("📚 Plan d'apprentissage")
+        from agents.gap_analyzer import LEARNING_RESOURCES
+        for gap in gaps:
+            res = LEARNING_RESOURCES.get(gap, {"niveau": "Intermédiaire", "durée": "30j", "ressource": "Documentation officielle"})
+            with st.expander(f"📖 {gap} — {res['durée']}"):
+                st.markdown(f"**Niveau :** {res['niveau']}")
+                st.markdown(f"**Ressource :** {res['ressource']}")
 
     # Questions d'entretien
     st.subheader("🎤 Questions d'entretien")

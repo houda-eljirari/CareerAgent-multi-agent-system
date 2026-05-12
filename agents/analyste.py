@@ -37,7 +37,8 @@ def analyste_node(state: dict) -> dict:
         print(f"  [RAG R2] '{query2[:40]}...' → {len(docs2)} docs")
 
         # ── Calcul du score basé sur le contexte RAG ──────────
-        score, matched, missing = _calculate_score(cv_text, context1 + context2)
+        offer_keywords = offer.get("ats_keywords", [])
+        score, matched, missing = _calculate_score(cv_text, context1 + context2, offer_keywords)
 
         scored_offer = {
             **offer,
@@ -78,20 +79,26 @@ def _extract_keywords(context: str) -> list:
     found = [kw for kw in tech_keywords if kw.lower() in context.lower()]
     return found[:5] if found else ["Python", "ML", "Git"]
 
-def _calculate_score(cv_text: str, context: str) -> tuple:
+def _calculate_score(cv_text: str, context: str, offer_keywords: list = []) -> tuple:
     """Calcule le score de compatibilité CV ↔ offre."""
-    keywords = _extract_keywords(context)
-    matched  = [kw for kw in keywords if kw.lower() in cv_text.lower()]
-    missing  = [kw for kw in keywords if kw.lower() not in cv_text.lower()]
+    # Priorité aux mots-clés de l'offre, sinon extraire du contexte RAG
+    keywords = offer_keywords if offer_keywords else _extract_keywords(context)
 
-    # Score = % de mots-clés présents dans le CV
     if not keywords:
         return 50, [], []
 
+    matched = [kw for kw in keywords if kw.lower() in cv_text.lower()]
+    missing = [kw for kw in keywords if kw.lower() not in cv_text.lower()]
+
     base_score = int((len(matched) / len(keywords)) * 100)
-    # Bonus si le CV est riche
+
+    # Bonus longueur CV
     if len(cv_text) > 200:
         base_score = min(base_score + 10, 100)
+
+    # Bonus contexte RAG — si le contexte confirme les compétences
+    rag_bonus = sum(1 for kw in matched if kw.lower() in context.lower())
+    base_score = min(base_score + rag_bonus * 2, 100)
 
     return base_score, matched, missing
 
