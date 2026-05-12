@@ -71,7 +71,7 @@ def cv_adapter_node(state: dict) -> dict:
     retry_count = state.get("_retry_count", 0)
 
     # Protection contre les boucles infinies
-    if retry_count >= 2:
+    if retry_count >= 3:
         print("[CV ADAPTER] ⚠️  Max retries atteint — adaptation simplifiée")
         adapted = _simple_adapt(cv_text, offer)
         return {

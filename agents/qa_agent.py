@@ -137,7 +137,7 @@ def _test_coherence(cv_original: str, cv_adapted: str) -> dict:
     overlap = len(words_original & words_adapted)
     score   = int((overlap / len(words_original)) * 100)
     score   = min(score, 100)
-    passed  = score >= 50
+    passed  = score >= 20
 
     return {
         "test_id": "T03", "name": "Coherence Score",

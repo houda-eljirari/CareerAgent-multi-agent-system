@@ -2,6 +2,9 @@
 import streamlit as st
 import sys
 import os
+import pdfplumber
+import io
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from graph import app, AgentState
@@ -44,6 +47,21 @@ st.title("🚀 CareerAgent")
 st.caption("Système Multi-Agent Intelligent — Trouve ton stage, adapte ton CV, prépare ton entretien.")
 st.divider()
 
+# ── Fonction extraction PDF ───────────────────────────────────
+def extract_text_from_pdf(uploaded_file) -> str:
+    """Extrait le texte d'un fichier PDF uploadé via pdfplumber."""
+    text = ""
+    try:
+        with pdfplumber.open(io.BytesIO(uploaded_file.read())) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+    except Exception as e:
+        st.error(f"Erreur lors de la lecture du PDF : {e}")
+        return ""
+    return text.strip()
+
 # ══════════════════════════════════════════════════════════════
 # ÉTAPE 1 : Input CV + Domaine
 # ══════════════════════════════════════════════════════════════
@@ -53,11 +71,35 @@ if st.session_state.stage == "input":
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        cv_text = st.text_area(
-            "Colle ton CV ici",
-            height=200,
-            placeholder="Ex: Master IA, compétences Python, LangChain, Git, Docker...",
+        # ── Upload PDF ────────────────────────────────────────
+        st.markdown("**📎 Upload ton CV (PDF)**")
+        uploaded_cv = st.file_uploader(
+            "Glisse ton CV ici ou clique pour choisir",
+            type=["pdf"],
+            label_visibility="collapsed"
         )
+
+        # Extraction automatique si PDF uploadé
+        cv_text = ""
+        if uploaded_cv is not None:
+            cv_text = extract_text_from_pdf(uploaded_cv)
+            if cv_text:
+                st.success(f"✅ CV extrait — {len(cv_text)} caractères détectés")
+                with st.expander("👁️ Aperçu du CV extrait"):
+                    st.text(cv_text[:800] + ("..." if len(cv_text) > 800 else ""))
+
+        # ── Ou saisie manuelle ────────────────────────────────
+        st.markdown("**✏️ Ou colle ton CV manuellement**")
+        cv_manual = st.text_area(
+            "Texte du CV",
+            height=150,
+            placeholder="Ex: Master IA, compétences Python, LangChain, Git, Docker...",
+            label_visibility="collapsed"
+        )
+
+        # Priorité au PDF, fallback sur le texte manuel
+        if cv_manual:
+            cv_text = cv_manual
 
     with col2:
         domain = st.selectbox(
@@ -70,9 +112,15 @@ if st.session_state.stage == "input":
             value="Je cherche un stage en IA"
         )
 
+        # Infos sur le CV chargé
+        if cv_text:
+            st.info(f"📄 CV prêt\n{len(cv_text)} caractères")
+        else:
+            st.warning("⚠️ Aucun CV chargé")
+
     if st.button("🔍 Lancer la recherche", type="primary", use_container_width=True):
         if not cv_text:
-            st.error("Colle ton CV avant de continuer !")
+            st.error("Upload ton CV en PDF ou colle son contenu avant de continuer !")
         else:
             with st.spinner("🤖 Les agents travaillent..."):
                 state = {
@@ -128,7 +176,6 @@ elif st.session_state.stage == "offers":
                 if st.button(f"Choisir cette offre", key=f"offer_{i}"):
                     st.session_state.selected_offer = offer
                     st.session_state.stage = "cv_adapt"
-                    # Reset config pour nouvelle session
                     st.session_state.config = {"configurable": {"thread_id": "streamlit-2"}}
                     st.rerun()
 
@@ -169,7 +216,7 @@ elif st.session_state.stage == "validation":
 
     result = st.session_state.result
 
-    # Affiche le rapport QA
+    # Rapport QA
     qa_report = result.get("_qa_report", {})
     if qa_report:
         st.subheader("🔬 Rapport QA")
@@ -184,7 +231,7 @@ elif st.session_state.stage == "validation":
                 )
         st.markdown(f"**Score global : {qa_report.get('overall_score')}/100**")
 
-    # Affiche le CV adapté
+    # CV adapté
     st.subheader("📄 CV Adapté")
     adapted_cv = result.get("adapted_cv", "")
     st.text_area("CV adapté par l'agent", value=adapted_cv, height=200)
@@ -230,12 +277,23 @@ elif st.session_state.stage == "results":
     else:
         st.success("Aucun gap majeur détecté !")
 
+    # Plan d'apprentissage
+    gap_plan = result3.get("_gap_plan", [])
+    if gap_plan:
+        st.subheader("📚 Plan d'apprentissage")
+        for item in gap_plan:
+            with st.expander(f"[{item.get('priorité','?').upper()}] {item.get('compétence')} — {item.get('durée')}"):
+                st.markdown(f"**Niveau :** {item.get('niveau')}")
+                st.markdown(f"**Ressource :** {item.get('ressource')}")
+                if item.get('conseil'):
+                    st.info(item.get('conseil'))
+
     # Questions d'entretien
     st.subheader("🎤 Questions d'entretien")
     questions = result3.get("interview_questions", [])
     for q in questions:
         with st.expander(f"[{q.get('type','?').upper()}] {q.get('question','?')}"):
-            st.write("Prépare une réponse structurée avec des exemples concrets.")
+            st.info(f"💡 Conseil : {q.get('conseil', 'Prépare une réponse structurée avec des exemples concrets.')}")
 
     # CV à télécharger
     st.subheader("📥 Télécharger le CV adapté")
