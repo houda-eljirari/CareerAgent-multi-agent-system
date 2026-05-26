@@ -120,3 +120,8 @@ def build_graph():
 
 app = build_graph()
 print("✅ Graph CareerAgent v2 compilé avec succès !")
+
+png_bytes = app.get_graph().draw_mermaid_png()
+
+with open("careeragent_workflow.png", "wb") as f:
+    f.write(png_bytes)
