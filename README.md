@@ -1,18 +1,7 @@
 # CareerAgent — Système Multi-Agent Intelligent
 
-> **Trouve ton stage · Adapte ton CV · Prépare ton entretien**
-> Projet de Fin de Module — Master SDIA · ENSET Mohammedia · 2025-2026
-
----
-
-## Équipe
-
-| Membre |
-|--------|
-| **EL JIRARI Houda** |
-| **EL BARNAOUI Maroua** |
-
-**Encadrante :** Prof. RETAL Sara — Module Systèmes Multi-Agents et Intelligence Artificielle Distribuée
+> **Trouve ton stage, adapte ton CV, prépare ton entretien.**  
+> Projet de Fin de Module — Master SDIA · ENSET Mohammedia · 2024-2025
 
 ---
 
@@ -214,6 +203,14 @@ python tools/prompt_evaluation.py
 
 ---
 
+## Équipe
+
+| Membre |
+|--------|
+| **EL JIRARI Houda** |
+| **EL BARNAOUI Maroua** |
+
+---
 Projet académique — Master SDIA · ENSET Mohammedia · 2025-2026
 Module : Systèmes Multi-Agents et Intelligence Artificielle Distribuée
 Encadrante : Prof. RETAL Sara
